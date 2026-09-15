@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tradeflow
+      POSTGRES_USER: tradeflow
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck: {test: ["CMD-SHELL", "pg_isready -U tradeflow"], interval: 5s, timeout: 5s, retries: 20}
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server","--appendonly","yes"]
+    volumes: [redis_data:/data]
+  app:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://tradeflow:${POSTGRES_PASSWORD:-change-me}@postgres:5432/tradeflow
+      REDIS_URL: redis://redis:6379/0
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+  worker:
+    build: .
+    command: ["python","-m","app.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://tradeflow:${POSTGRES_PASSWORD:-change-me}@postgres:5432/tradeflow
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_started}
+volumes:
+  postgres_data:
+  redis_data:
